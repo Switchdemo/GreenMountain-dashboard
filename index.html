@@ -1805,6 +1805,7 @@ async function createSchedule() {
 
     // Build LC hex with scheduled start time baked in
     const lcHex = buildLCHex(action, mode, stratNum, reps, schedUnix);
+  const lastEventId = lcEventId > 1 ? lcEventId - 1 : 254; // capture ID just used
     console.log(`Sending LC hex immediately: ${lcHex} (startTime=${schedUnix})`);
 
     // Send payload to device(s) immediately — device stores and executes at scheduled time
@@ -1833,7 +1834,7 @@ async function createSchedule() {
       lc_timeout: stratTimeout || null,
       lc_cycle: stratCycle || null,
       lc_reps: reps,
-      lc_event_id: currentEventId,
+      lc_event_id: lastEventId,
       one_time: true,
       status: "sent",
       fired_at: new Date().toISOString()
