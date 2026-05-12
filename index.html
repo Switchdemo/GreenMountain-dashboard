@@ -2334,8 +2334,8 @@ function buildRestoreHex(relayAction) {
 
 async function sendLCToDevice(uid, lcHex) {
   // Send LC hex to device via Worker → Notehub data.qi
-  // Worker expects the LC payload as body, wraps it for Notehub
-  const payload = { LC: lcHex };
+  // Must match working format: {"body":{"LC":"..."},"req":"note.add","sync":true}
+  const payload = { body: { LC: lcHex }, req: "note.add", sync: true };
   try {
     const res = await fetch(PROXY_URL, {
       method: "POST",
