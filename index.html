@@ -2333,21 +2333,31 @@ function buildRestoreHex(relayAction) {
 }
 
 async function sendLCToDevice(uid, lcHex) {
-  // Deliver to Notehub as data.qi note in exact required format:
-  // {"body":{"LC":"..."},"req":"note.add","sync":true}
-  const payload = {
-    body: { LC: lcHex },
-    req: "note.add",
-    sync: true
-  };
+  // Send LC hex to device via Worker → Notehub data.qi
+  // Worker expects the LC payload as body, wraps it for Notehub
+  const payload = { LC: lcHex };
   try {
-    await fetch(PROXY_URL, {
+    const res = await fetch(PROXY_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Device-UID": uid
+      },
       body: JSON.stringify(payload)
     });
-    console.log(`LC sent to ${uid}:`, JSON.stringify(payload));
-  } catch(e) { console.error("LC send error", uid, e); }
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`LC send error ${uid}:`, err);
+      setStatus("error", `Error ${res.status} — command failed.`);
+      return false;
+    }
+    console.log(`LC sent to ${uid}: ${lcHex}`);
+    return true;
+  } catch(e) {
+    console.error("LC send error", uid, e);
+    setStatus("error", `Network error: ${e.message}`);
+    return false;
+  }
 }
 
 async function executeQueuedCommand(item) {
