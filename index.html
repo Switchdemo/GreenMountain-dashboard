@@ -4871,11 +4871,10 @@ async function send(deviceId, key, label) {
   try {
     const device = DEVICES.find(d => d.id === deviceId);
     const uid    = device?.uid || DEVICES[0].uid;
-    const lcHex  = COMMANDS[key]?.body?.LC;
     const res = await fetch(PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Device-UID": uid },
-      body: JSON.stringify({ LC: lcHex })
+      body: JSON.stringify(COMMANDS[key])
     });
     if (res.ok) { setStatus("ready", label + " — done."); busy = false; setDeviceDisabled(deviceId, false); return true; }
     else { setStatus("error", "Error " + res.status + " — command failed."); busy = false; setDeviceDisabled(deviceId, false); return false; }
@@ -4883,11 +4882,10 @@ async function send(deviceId, key, label) {
 }
 async function sendToDevice(uid, key) {
   try {
-    const lcHex = COMMANDS[key]?.body?.LC;
     await fetch(PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Device-UID": uid },
-      body: JSON.stringify({ LC: lcHex })
+      body: JSON.stringify(COMMANDS[key])
     });
   } catch(e) { console.error("Send error", uid, e); }
 }
