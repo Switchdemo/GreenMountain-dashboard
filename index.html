@@ -4939,10 +4939,11 @@ function setDeviceDisabled(deviceId, disabled) {
 // ── Send Command ──────────────────────────────────────────────────────────────
 async function send(deviceId, key, label) {
   if (busy) return false;
+  const device = DEVICES.find(d => d.id === deviceId);
+  if (!device) { setStatus("error", "Unknown device — command blocked."); busy = false; setDeviceDisabled(deviceId, false); return false; }
   busy = true; setDeviceDisabled(deviceId, true); setStatus("sending", label + "...");
   try {
-    const device = DEVICES.find(d => d.id === deviceId);
-    const uid    = device?.uid || DEVICES[0].uid;
+    const uid = device.uid;
     const res = await fetch(PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Device-UID": uid },
