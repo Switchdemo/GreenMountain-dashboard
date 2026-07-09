@@ -1301,8 +1301,77 @@
         <div id="rm-backfill-result" style="font-size:12px;color:var(--text-secondary);font-family:monospace;"></div>
       </div>
 
-      <!-- Settings -->
+      <!-- Firmware Command Settings -->
       <div class="sched-card" style="margin-top:1rem;">
+        <div class="sched-card-header">
+          <div class="sched-card-title">📡 Firmware Command Settings</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-hint);margin-bottom:12px;">
+          Send a firmware assignment command to enable or disable current-change bubble-ups on the device.
+          When enabled, the device sends a bubble-up whenever current transitions between zero and non-zero —
+          this is what drives live session detection.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;">
+            <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Enable Command (bit 8 SET)</div>
+            <div id="rm-hex-preview-on" style="font-family:monospace;font-size:12px;color:var(--green-dark);letter-spacing:1px;">—</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;">
+            <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Disable Command (bit 8 CLEAR)</div>
+            <div id="rm-hex-preview-off" style="font-family:monospace;font-size:12px;color:var(--text-hint);letter-spacing:1px;">—</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:10px;align-items:end;margin-bottom:10px;">
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:3px;">Target Type</label>
+            <select id="rm-manual-target-type" onchange="onRmManualTargetTypeChange()"
+              style="width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);">
+              <option value="">— Select —</option>
+              <option value="all">All Devices</option>
+              <option value="device">Specific Device</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:3px;">Target</label>
+            <select id="rm-manual-target"
+              style="width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);">
+              <option value="">—</option>
+            </select>
+          </div>
+          <button class="queue-refresh" style="white-space:nowrap;background:rgba(22,163,74,0.1);border-color:var(--green);color:var(--green-dark);"
+            onclick="sendRuntimeCommand('activate')">⚡ Enable</button>
+          <button class="queue-refresh" style="white-space:nowrap;background:rgba(107,114,128,0.1);border-color:var(--border-md);color:var(--text-hint);"
+            onclick="sendRuntimeCommand('deactivate')">🔕 Disable</button>
+        </div>
+        <div id="rm-manual-log" style="font-size:11px;font-family:monospace;color:var(--text-hint);min-height:20px;"></div>
+      </div>
+
+      <!-- Manual Session Control -->
+      <div class="sched-card" style="margin-top:1rem;">
+        <div class="sched-card-header">
+          <div class="sched-card-title">🎛 Manual Session Control</div>
+          <span id="rm-live-status" style="font-size:11px;font-family:monospace;color:var(--text-hint);"></span>
+        </div>
+        <div style="font-size:12px;color:var(--text-hint);margin-bottom:12px;">
+          Manually open or close a runtime session for a device. Useful for testing or overriding
+          automatic detection. Live session detection runs automatically every 30 seconds when the
+          dashboard is open.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:end;margin-bottom:10px;">
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:3px;">Device</label>
+            <select id="rm-manual-session-device"
+              style="width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);">
+              <option value="">— Select Device —</option>
+            </select>
+          </div>
+          <button class="queue-refresh" style="white-space:nowrap;background:rgba(22,163,74,0.1);border-color:var(--green);color:var(--green-dark);"
+            onclick="rmManualOpenSession()">▶ Open Session</button>
+          <button class="queue-refresh" style="white-space:nowrap;background:rgba(220,38,38,0.1);border-color:var(--red);color:var(--red);"
+            onclick="rmManualCloseSession()">⏹ Close Session</button>
+        </div>
+        <div id="rm-manual-session-log" style="font-size:11px;font-family:monospace;color:var(--text-hint);min-height:20px;"></div>
+      </div>
         <div class="sched-card-header">
           <div class="sched-card-title">⚙️ Runtime Monitor Settings</div>
           <button class="queue-refresh" onclick="saveRuntimeSettings()">Save</button>
@@ -5326,6 +5395,9 @@ async function loadLatestDevice(deviceId) {
     </div>`;
     tsEl.textContent = `Last updated: ${new Date(r.recorded_at).toLocaleString()}`;
 
+    // Live session detection — check current transition and open/close sessions
+    await rmCheckCurrentTransition(device.uid, r.current, r.recorded_at);
+
     // Load health data - use device_readings SW/SQ as primary, device_health for voltage/temp
     const healthEl = document.getElementById(`health-strip-${deviceId}`);
     if (healthEl) {
@@ -5441,7 +5513,211 @@ initAuth();
 // Init summary tab since it's the default active tab
 setTimeout(() => initSummaryTab(), 100);
 
-// ── Runtime Monitor ────────────────────────────────────────────────────────────
+// ── Firmware Command ──────────────────────────────────────────────────────────
+function buildCurrentChangeFlagHex(enable) {
+  const flagByte = enable ? 0x80 : 0x02;
+  const bytes = [0xA1, 0x05, 0x00, 0x1A, 0x03, flagByte];
+  let checksum = 0;
+  bytes.forEach(b => { checksum ^= b; });
+  bytes.push(checksum);
+  return bytes.map(b => b.toString(16).toUpperCase().padStart(2,"0")).join("");
+}
+
+function rmPopulateHexPreviews() {
+  const onHex  = buildCurrentChangeFlagHex(true);
+  const offHex = buildCurrentChangeFlagHex(false);
+  const onEl   = document.getElementById("rm-hex-preview-on");
+  const offEl  = document.getElementById("rm-hex-preview-off");
+  if (onEl)  onEl.textContent  = onHex.match(/.{1,2}/g).join(" ");
+  if (offEl) offEl.textContent = offHex.match(/.{1,2}/g).join(" ");
+}
+
+function onRmManualTargetTypeChange() {
+  const type = document.getElementById("rm-manual-target-type")?.value;
+  const sel  = document.getElementById("rm-manual-target");
+  if (!sel) return;
+  if (type === "device") {
+    sel.innerHTML = DEVICES.map(d => `<option value="${d.uid}">${d.name || unitName(d.uid)}</option>`).join("");
+    sel.disabled = false;
+  } else {
+    sel.innerHTML = '<option value="">—</option>';
+    sel.disabled = true;
+  }
+}
+
+async function sendRuntimeCommand(action) {
+  const logEl     = document.getElementById("rm-manual-log");
+  const enable    = action === "activate";
+  const lcHex     = buildCurrentChangeFlagHex(enable);
+  const targetType = document.getElementById("rm-manual-target-type")?.value;
+  const targetVal  = document.getElementById("rm-manual-target")?.value;
+
+  if (!targetType) { if (logEl) logEl.textContent = "⚠ Select a target type first."; return; }
+
+  const targets = targetType === "all"
+    ? DEVICES.map(d => d.uid)
+    : targetVal ? [targetVal] : [];
+
+  if (!targets.length) { if (logEl) logEl.textContent = "⚠ No devices matched target."; return; }
+  if (logEl) logEl.textContent = `Sending ${action} [${lcHex.match(/.{1,2}/g).join(" ")}] to ${targets.length} device(s)…`;
+
+  let sent = 0;
+  for (const uid of targets) {
+    try {
+      await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Device-UID": uid },
+        body: JSON.stringify({ body: { LC: lcHex }, req: "note.add", sync: true })
+      });
+      sent++;
+    } catch(e) { console.warn("sendRuntimeCommand:", e.message); }
+  }
+
+  if (logEl) logEl.textContent = `✓ ${action.toUpperCase()} sent to ${sent}/${targets.length} device(s) at ${new Date().toLocaleTimeString()}.`;
+
+  try {
+    await supabasePost("runtime_monitor_log", {
+      action, target_type: targetType, target_id: targetVal,
+      lc_hex: lcHex, device_count: sent, trigger_source: "manual",
+      fired_at: new Date().toISOString()
+    });
+  } catch(e) {}
+}
+
+// ── Live Session State Machine ────────────────────────────────────────────────
+// Tracks current on/off state per device and auto-writes equipment_runtime_sessions
+const rmLiveState = new Map();
+// { isOn: bool, sessionId: number|null, sessionStart: string|null }
+
+async function rmCheckCurrentTransition(deviceUid, currentRaw, recordedAt) {
+  const onThreshold = parseFloat(rmSettings.current_on_threshold || "0.5");
+  const amps  = currentRaw != null ? currentRaw / 10 : 0;
+  const isOn  = amps >= onThreshold;
+  const prev  = rmLiveState.get(deviceUid) || { isOn: false, sessionId: null, sessionStart: null };
+
+  if (isOn && !prev.isOn) {
+    // Transition: OFF → ON — open a new session
+    let sessionId = null;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/equipment_runtime_sessions`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        body: JSON.stringify({
+          device_uid:    deviceUid,
+          session_start: recordedAt,
+          trigger_source: "live",
+          created_at:    new Date().toISOString()
+        })
+      });
+      const rows = await res.json();
+      sessionId = rows?.[0]?.id || null;
+    } catch(e) { console.warn("[RM Live] open session:", e.message); }
+
+    rmLiveState.set(deviceUid, { isOn: true, sessionId, sessionStart: recordedAt });
+    console.log(`[RM Live] Session OPENED for ${deviceUid} at ${recordedAt} (${amps.toFixed(1)}A)`);
+    rmUpdateLiveStatus();
+
+  } else if (!isOn && prev.isOn && prev.sessionId) {
+    // Transition: ON → OFF — close the open session
+    const durMins = prev.sessionStart
+      ? Math.round((new Date(recordedAt) - new Date(prev.sessionStart)) / 60000)
+      : null;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/equipment_runtime_sessions?id=eq.${prev.sessionId}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ session_end: recordedAt, duration_minutes: durMins })
+      });
+    } catch(e) { console.warn("[RM Live] close session:", e.message); }
+
+    console.log(`[RM Live] Session CLOSED for ${deviceUid} at ${recordedAt} (${durMins} min)`);
+    rmLiveState.set(deviceUid, { isOn: false, sessionId: null, sessionStart: null });
+    rmUpdateLiveStatus();
+
+  } else {
+    // No transition — just update isOn state
+    rmLiveState.set(deviceUid, { ...prev, isOn });
+  }
+}
+
+function rmUpdateLiveStatus() {
+  const el = document.getElementById("rm-live-status");
+  if (!el) return;
+  const openSessions = [...rmLiveState.values()].filter(s => s.isOn).length;
+  el.textContent = openSessions > 0
+    ? `🟢 ${openSessions} active session${openSessions > 1 ? "s" : ""}`
+    : "⚫ No active sessions";
+}
+
+// ── Manual Session Open / Close ───────────────────────────────────────────────
+async function rmManualOpenSession() {
+  const uid   = document.getElementById("rm-manual-session-device")?.value;
+  const logEl = document.getElementById("rm-manual-session-log");
+  if (!uid) { if (logEl) logEl.textContent = "⚠ Select a device first."; return; }
+
+  const now = new Date().toISOString();
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/equipment_runtime_sessions`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+      },
+      body: JSON.stringify({ device_uid: uid, session_start: now, trigger_source: "manual", created_at: now })
+    });
+    const rows = await res.json();
+    const sessionId = rows?.[0]?.id;
+    rmLiveState.set(uid, { isOn: true, sessionId, sessionStart: now });
+    rmUpdateLiveStatus();
+    if (logEl) logEl.textContent = `✓ Session opened for ${unitName(uid)} at ${new Date(now).toLocaleTimeString()} (id: ${sessionId})`;
+  } catch(e) {
+    if (logEl) logEl.textContent = `❌ Error: ${e.message}`;
+  }
+}
+
+async function rmManualCloseSession() {
+  const uid   = document.getElementById("rm-manual-session-device")?.value;
+  const logEl = document.getElementById("rm-manual-session-log");
+  if (!uid) { if (logEl) logEl.textContent = "⚠ Select a device first."; return; }
+
+  const state = rmLiveState.get(uid);
+  if (!state?.sessionId) { if (logEl) logEl.textContent = "⚠ No open session found for this device."; return; }
+
+  const now     = new Date().toISOString();
+  const durMins = state.sessionStart
+    ? Math.round((new Date(now) - new Date(state.sessionStart)) / 60000)
+    : null;
+
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/equipment_runtime_sessions?id=eq.${state.sessionId}`, {
+      method: "PATCH",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify({ session_end: now, duration_minutes: durMins })
+    });
+    rmLiveState.set(uid, { isOn: false, sessionId: null, sessionStart: null });
+    rmUpdateLiveStatus();
+    if (logEl) logEl.textContent = `✓ Session closed for ${unitName(uid)} — duration: ${durMins != null ? durMins + " min" : "unknown"}`;
+  } catch(e) {
+    if (logEl) logEl.textContent = `❌ Error: ${e.message}`;
+  }
+}
 
 // supabaseGetPaged — fetches all rows across multiple range-header requests
 async function supabaseGetPaged(query, maxRows = 5000) {
@@ -5473,7 +5749,9 @@ let rmAnalyticsSessions = [];
 async function initRuntimeMonitor() {
   await loadRmSettings();
   populateRmDeviceSelects();
+  rmPopulateHexPreviews();
   await loadRuntimeAnalytics();
+  rmUpdateLiveStatus();
   // Set backfill date defaults: last 30 days
   const today = new Date();
   const prior = new Date(today); prior.setDate(prior.getDate() - 30);
@@ -5508,7 +5786,7 @@ async function saveRuntimeSettings() {
 }
 
 function populateRmDeviceSelects() {
-  ["rm-analytics-device","rm-backfill-device"].forEach(id => {
+  ["rm-analytics-device","rm-backfill-device","rm-manual-session-device"].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const isBackfill = id === "rm-backfill-device";
