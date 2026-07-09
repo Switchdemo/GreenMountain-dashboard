@@ -43,6 +43,11 @@
 
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
+  .rm-chart-toggle { padding:3px 10px;border-radius:12px;border:0.5px solid var(--border-md);background:transparent;font-size:11px;cursor:pointer;color:var(--text-hint); }
+  .rm-chart-toggle.active { background:var(--surface2);color:var(--text-primary);font-weight:600;border-color:var(--border-md); }
+  .rm-session-row { display:grid;grid-template-columns:140px 80px 60px 70px 70px 60px 80px 70px;gap:6px;padding:6px 10px;font-size:11px;align-items:center;border-bottom:0.5px solid var(--border); }
+  .rm-session-header { font-size:10px;font-weight:700;color:var(--text-hint);text-transform:uppercase;letter-spacing:.04em;background:var(--surface2);border-radius:var(--radius-sm);border-bottom:none; }
+  .rm-daily-row { display:grid;grid-template-columns:100px 60px 70px 70px 70px 70px 70px;gap:6px;padding:5px 10px;font-size:11px;align-items:center;border-bottom:0.5px solid var(--border); }
   .scroll-content { padding: 1.25rem 1rem; }
 
   /* ── Device Cards ── */
@@ -432,6 +437,7 @@
     <button class="sub-tab-btn" id="sub-groups" onclick="switchSub('devices','groups',this)">Groups</button>
     <button class="sub-tab-btn" id="sub-map" onclick="switchSub('devices','map',this)">Device Location</button>
     <button class="sub-tab-btn" id="sub-settings" onclick="switchSub('devices','settings',this)">Device Settings</button>
+    <button class="sub-tab-btn" id="sub-runtime" onclick="switchSub('devices','runtime',this)">Runtime Monitor</button>
   </div>
   <div class="status-bar">
     <div class="dot ready" id="dot"></div>
@@ -1160,6 +1166,168 @@
 </div>
 
 <!-- ── ADMIN TAB ── -->
+<!-- ── RUNTIME MONITOR TAB ──────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-runtime">
+  <div class="scroll-content">
+
+    <!-- KPI Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;padding:1rem 1rem 0;max-width:1200px;margin:0 auto;">
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Sessions</div>
+        <div id="rm-kpi-sessions" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Total Runtime</div>
+        <div id="rm-kpi-total-hrs" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Avg Duration</div>
+        <div id="rm-kpi-avg-dur" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Longest</div>
+        <div id="rm-kpi-longest" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Avg Temp</div>
+        <div id="rm-kpi-avg-temp" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Avg Heat Idx</div>
+        <div id="rm-kpi-avg-heat" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Avg Humidity</div>
+        <div id="rm-kpi-avg-humidity" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+      <div class="sched-card" style="padding:12px;text-align:center;">
+        <div style="font-size:10px;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">On-Peak</div>
+        <div id="rm-kpi-peak-pct" style="font-size:22px;font-weight:700;">—</div>
+      </div>
+    </div>
+
+    <div style="max-width:1200px;margin:0 auto;padding:0 1rem 1rem;">
+
+      <!-- Analytics Controls -->
+      <div class="sched-card" style="margin-top:1rem;">
+        <div class="sched-card-header">
+          <div class="sched-card-title">📊 Runtime Analytics</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="rm-analytics-device" style="font-size:12px;padding:5px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);">
+              <option value="">— Select Device —</option>
+            </select>
+            <select id="rm-analytics-range" style="font-size:12px;padding:5px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);">
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="60">Last 60 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <button class="queue-refresh" onclick="loadRuntimeAnalytics()">🔄 Refresh</button>
+            <button class="history-load-btn" style="color:var(--green-dark);border-color:var(--green);" onclick="exportRuntimeCSV()">Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Main Chart -->
+        <div style="position:relative;margin-bottom:14px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+            <span style="font-size:11px;color:var(--text-hint);">Chart:</span>
+            <button id="rm-toggle-timeline" class="rm-chart-toggle active" onclick="rmSetChartMode('timeline',this)">Timeline</button>
+            <button id="rm-toggle-scatter"  class="rm-chart-toggle"        onclick="rmSetChartMode('scatter',this)">Trend</button>
+            <span style="font-size:11px;color:var(--text-hint);margin-left:8px;">Overlay:</span>
+            <button id="rm-cond-temp"     class="rm-chart-toggle active" onclick="rmSetCondition('temp',this)">Temp</button>
+            <button id="rm-cond-heat"     class="rm-chart-toggle"        onclick="rmSetCondition('heat',this)">Heat Idx</button>
+            <button id="rm-cond-humidity" class="rm-chart-toggle"        onclick="rmSetCondition('humidity',this)">Humidity</button>
+          </div>
+          <canvas id="rm-main-chart" style="max-height:280px;"></canvas>
+        </div>
+
+        <!-- Daily Summary Chart -->
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Daily Summary</div>
+          <div id="rm-daily-summary"><div class="sched-empty">Load analytics to see daily summary.</div></div>
+        </div>
+
+        <!-- Session Detail Table with slider -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:12px;flex-wrap:wrap;">
+            <div style="font-size:11px;font-weight:600;color:var(--text-hint);text-transform:uppercase;letter-spacing:.05em;">Session Detail</div>
+            <div style="display:flex;align-items:center;gap:10px;flex:1;max-width:340px;">
+              <span style="font-size:10px;color:var(--text-hint);white-space:nowrap;">Show</span>
+              <input type="range" id="rm-sessions-slider" min="10" max="200" step="10" value="50"
+                style="flex:1;accent-color:var(--blue-dark);cursor:pointer;"
+                oninput="rmUpdateSessionSlider(this.value)" />
+              <span id="rm-sessions-slider-label" style="font-size:11px;font-weight:600;color:var(--text-primary);font-family:monospace;min-width:60px;text-align:right;">50 rows</span>
+            </div>
+            <span id="rm-sessions-count" style="font-size:10px;color:var(--text-hint);font-family:monospace;white-space:nowrap;"></span>
+          </div>
+          <div style="max-height:420px;overflow-y:auto;border:0.5px solid var(--border-md);border-radius:var(--radius-sm);">
+            <div id="rm-sessions-table"><div class="sched-empty">Select a device and click Refresh to load analytics.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Backfill -->
+      <div class="sched-card" style="margin-top:1rem;">
+        <div class="sched-card-header">
+          <div class="sched-card-title">🕓 Historical Backfill</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-hint);margin-bottom:12px;">
+          Scan historical <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">device_readings</code> records and reconstruct equipment runtime sessions from current transitions (0→non-zero = start, non-zero→0 = stop).
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px;">
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:3px;">Device</label>
+            <select id="rm-backfill-device" style="width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);">
+              <option value="">All devices</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:3px;">From</label>
+            <input type="date" id="rm-backfill-from" style="width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);" />
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:3px;">To</label>
+            <input type="date" id="rm-backfill-to" style="width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);" />
+          </div>
+          <button class="queue-refresh" onclick="runRuntimeBackfill()">Run Backfill</button>
+        </div>
+        <div id="rm-backfill-progress" style="display:none;margin-bottom:8px;">
+          <div style="height:4px;background:var(--border-md);border-radius:2px;overflow:hidden;margin-bottom:4px;">
+            <div id="rm-backfill-bar" style="height:100%;background:var(--blue-dark);border-radius:2px;width:0%;transition:width .3s;"></div>
+          </div>
+          <div id="rm-backfill-status" style="font-size:11px;color:var(--text-hint);font-family:monospace;"></div>
+        </div>
+        <div id="rm-backfill-result" style="font-size:12px;color:var(--text-secondary);font-family:monospace;"></div>
+      </div>
+
+      <!-- Settings -->
+      <div class="sched-card" style="margin-top:1rem;">
+        <div class="sched-card-header">
+          <div class="sched-card-title">⚙️ Runtime Monitor Settings</div>
+          <button class="queue-refresh" onclick="saveRuntimeSettings()">Save</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:4px;">Current ON Threshold (A)</label>
+            <input type="number" id="rm-current-on-threshold" value="0.5" min="0" step="0.1"
+              style="width:100%;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);font-size:12px;" />
+            <div style="font-size:10px;color:var(--text-hint);margin-top:3px;">Minimum current (A) to count as generator running</div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-hint);display:block;margin-bottom:4px;">Feed Key (optional)</label>
+            <input type="text" id="rm-feed-key" placeholder="e.g. nws_temp"
+              style="width:100%;padding:6px 8px;border-radius:var(--radius-sm);border:0.5px solid var(--border-md);background:var(--surface2);font-size:12px;" />
+            <div style="font-size:10px;color:var(--text-hint);margin-top:3px;">Correlate sessions with a monitor feed value</div>
+          </div>
+        </div>
+        <div id="rm-settings-saved-badge" style="display:none;margin-top:8px;font-size:11px;color:var(--green-dark);font-weight:600;">✓ Settings saved</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <div class="tab-pane" id="tab-admin">
   <div class="scroll-content">
     <div style="max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
@@ -1406,6 +1574,7 @@ function runTabInit(name) {
   if (name === "groups")     loadGroups();
   if (name === "settings")   initSettingsTab();
   if (name === "weather")    initWeatherTab();
+  if (name === "runtime")    initRuntimeMonitor();
   if (name === "admin")      { updateAdminHeader(); loadUsersTable(); }
 }
 
@@ -5271,6 +5440,401 @@ initHeaderWeather();
 initAuth();
 // Init summary tab since it's the default active tab
 setTimeout(() => initSummaryTab(), 100);
+
+// ── Runtime Monitor ────────────────────────────────────────────────────────────
+
+// supabaseGetPaged — fetches all rows across multiple range-header requests
+async function supabaseGetPaged(query, maxRows = 5000) {
+  const pageSize = 1000;
+  let allRows = [], offset = 0;
+  while (allRows.length < maxRows) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${query}${query.includes('?')?'&':'?'}limit=${pageSize}&offset=${offset}`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`, "Range-Unit": "items", "Range": `${offset}-${offset+pageSize-1}` }
+    });
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) break;
+    allRows = allRows.concat(rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allRows;
+}
+
+// State
+let rmSettings         = {};
+let rmSchedulePoller   = null;
+let rmTriggerPoller    = null;
+let rmChartMode        = "timeline";
+let rmChartCondition   = "temp";
+let rmShowDayNight     = false;
+let rmMainChart        = null;
+let rmAnalyticsSessions = [];
+
+async function initRuntimeMonitor() {
+  await loadRmSettings();
+  populateRmDeviceSelects();
+  await loadRuntimeAnalytics();
+  // Set backfill date defaults: last 30 days
+  const today = new Date();
+  const prior = new Date(today); prior.setDate(prior.getDate() - 30);
+  const fmt = d => d.toISOString().split("T")[0];
+  const fromEl = document.getElementById("rm-backfill-from");
+  const toEl   = document.getElementById("rm-backfill-to");
+  if (fromEl && !fromEl.value) fromEl.value = fmt(prior);
+  if (toEl   && !toEl.value)   toEl.value   = fmt(today);
+}
+
+async function loadRmSettings() {
+  try {
+    const rows = await supabaseGet("program_settings?setting_key=like.rm_%25");
+    if (Array.isArray(rows)) rows.forEach(r => { rmSettings[r.setting_key.replace("rm_","")] = r.setting_value; });
+  } catch(e) {}
+  const set = (id, key) => { const el = document.getElementById(id); if (el && rmSettings[key] != null) el.value = rmSettings[key]; };
+  set("rm-current-on-threshold", "current_on_threshold");
+  set("rm-feed-key",             "feed_key");
+}
+
+async function saveRuntimeSettings() {
+  const pairs = [
+    ["rm_current_on_threshold", document.getElementById("rm-current-on-threshold")?.value?.trim() || "0.5"],
+    ["rm_feed_key",             document.getElementById("rm-feed-key")?.value?.trim()             || ""],
+  ];
+  for (const [key, val] of pairs) {
+    rmSettings[key.replace("rm_","")] = val;
+    try { await supabaseUpsert("program_settings", { setting_key: key, setting_value: val }, "setting_key"); } catch(e) {}
+  }
+  const badge = document.getElementById("rm-settings-saved-badge");
+  if (badge) { badge.style.display = "inline-block"; setTimeout(() => badge.style.display = "none", 2500); }
+}
+
+function populateRmDeviceSelects() {
+  ["rm-analytics-device","rm-backfill-device"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const isBackfill = id === "rm-backfill-device";
+    sel.innerHTML = (isBackfill ? '<option value="">All devices</option>' : '<option value="">— Select Device —</option>') +
+      DEVICES.map(d => `<option value="${d.uid}">${d.name || unitName(d.uid)}</option>`).join("");
+  });
+}
+
+async function loadRuntimeAnalytics() {
+  const deviceFilter = document.getElementById("rm-analytics-device")?.value;
+  const rangeDays    = parseInt(document.getElementById("rm-analytics-range")?.value || "30");
+  const since        = new Date(Date.now() - rangeDays * 864e5).toISOString();
+  const tableEl      = document.getElementById("rm-sessions-table");
+
+  if (!deviceFilter) {
+    if (tableEl) tableEl.innerHTML = '<div class="sched-empty">Select a device from the dropdown to load analytics.</div>';
+    return;
+  }
+  if (tableEl) tableEl.innerHTML = '<div class="sched-empty">Loading…</div>';
+
+  let sessions = [];
+  try {
+    sessions = await supabaseGetPaged(
+      `equipment_runtime_sessions?device_uid=eq.${encodeURIComponent(deviceFilter)}&session_start=gte.${since}&order=session_start.asc`,
+      5000
+    );
+    if (!Array.isArray(sessions)) sessions = [];
+  } catch(e) {
+    if (tableEl) tableEl.innerHTML = `<div class="sched-empty">Error: ${e.message}</div>`;
+    return;
+  }
+
+  const kpiIds = ["rm-kpi-sessions","rm-kpi-total-hrs","rm-kpi-avg-dur","rm-kpi-longest",
+                  "rm-kpi-avg-temp","rm-kpi-avg-heat","rm-kpi-avg-humidity","rm-kpi-peak-pct"];
+
+  if (!sessions.length) {
+    if (tableEl) tableEl.innerHTML = '<div class="sched-empty">No sessions found. Run Historical Backfill to populate data.</div>';
+    kpiIds.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = "—"; });
+    return;
+  }
+
+  if (tableEl) tableEl.innerHTML = '<div class="sched-empty">Correlating weather data…</div>';
+  sessions = await joinFeedDataToSessions(sessions);
+  rmAnalyticsSessions = sessions;
+
+  const complete  = sessions.filter(s => s.session_end && s.duration_minutes != null);
+  const totalMins = complete.reduce((s,r) => s + (r.duration_minutes||0), 0);
+  const avgDur    = complete.length ? totalMins / complete.length : 0;
+  const longest   = complete.length ? Math.max(...complete.map(r => r.duration_minutes||0)) : 0;
+  const avg       = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1) : null;
+  const temps     = sessions.map(s => s.temp_avg).filter(v => v != null);
+  const heats     = sessions.map(s => s.heat_index_avg).filter(v => v != null);
+  const humids    = sessions.map(s => s.humidity_avg).filter(v => v != null);
+  const peakSess  = sessions.filter(s => s.is_peak).length;
+  const peakPct   = sessions.length ? Math.round(peakSess/sessions.length*100) : 0;
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set("rm-kpi-sessions",     sessions.length);
+  set("rm-kpi-total-hrs",    totalMins < 60 ? Math.round(totalMins)+" min" : (totalMins/60).toFixed(1)+" h");
+  set("rm-kpi-avg-dur",      avgDur < 60 ? Math.round(avgDur)+" min" : (avgDur/60).toFixed(1)+" h");
+  set("rm-kpi-longest",      longest < 60 ? longest+" min" : (longest/60).toFixed(1)+" h");
+  set("rm-kpi-avg-temp",     avg(temps)  ? avg(temps)+"°F"  : "—");
+  set("rm-kpi-avg-heat",     avg(heats)  ? avg(heats)+"°F"  : "—");
+  set("rm-kpi-avg-humidity", avg(humids) ? avg(humids)+"%" : "—");
+  set("rm-kpi-peak-pct",     `${peakSess} (${peakPct}%)`);
+
+  renderRmMainChart(sessions);
+  renderRmDailySummary(sessions, rangeDays);
+  renderRmSessionTable(sessions);
+}
+
+async function joinFeedDataToSessions(sessions) {
+  if (!sessions.length) return sessions;
+  const toISO = ts => ts ? new Date(ts).toISOString() : null;
+  const firstStart = new Date(sessions[0].session_start); firstStart.setHours(firstStart.getHours() - 2);
+  const lastEnd = new Date(sessions[sessions.length-1].session_end || sessions[sessions.length-1].session_start); lastEnd.setHours(lastEnd.getHours() + 2);
+  const earliest = firstStart.toISOString(), latest = lastEnd.toISOString();
+
+  const [tempRows, heatRows, humidRows, touRows] = await Promise.all([
+    supabaseGetPaged(`monitor_feed_readings?feed_key=eq.nws_temp&recorded_at=gte.${earliest}&recorded_at=lte.${latest}&order=recorded_at.asc&select=recorded_at,value`, 5000).catch(() => []),
+    supabaseGetPaged(`monitor_feed_readings?feed_key=eq.nws_heat_index&recorded_at=gte.${earliest}&recorded_at=lte.${latest}&order=recorded_at.asc&select=recorded_at,value`, 5000).catch(() => []),
+    supabaseGetPaged(`monitor_feed_readings?feed_key=eq.nws_humidity&recorded_at=gte.${earliest}&recorded_at=lte.${latest}&order=recorded_at.asc&select=recorded_at,value`, 5000).catch(() => []),
+    supabaseGetPaged(`monitor_feed_readings?feed_key=eq.tou_peak&recorded_at=gte.${earliest}&recorded_at=lte.${latest}&order=recorded_at.asc&select=recorded_at,value`, 5000).catch(() => []),
+  ]);
+
+  const nearest = (rows, ts) => {
+    if (!rows.length || !ts) return null;
+    const t = new Date(ts).getTime();
+    let best = rows[0];
+    for (const r of rows) { if (Math.abs(new Date(r.recorded_at).getTime()-t) < Math.abs(new Date(best.recorded_at).getTime()-t)) best = r; }
+    return best?.value != null ? parseFloat(best.value) : null;
+  };
+  const rangeAvg = (rows, s0, e0) => {
+    if (!rows.length || !s0) return null;
+    if (!e0) return nearest(rows, s0);
+    const s = new Date(s0).getTime(), e = new Date(e0).getTime();
+    const ir = rows.filter(r => { const t = new Date(r.recorded_at).getTime(); return t >= s && t <= e; });
+    if (!ir.length) return nearest(rows, s0);
+    return parseFloat((ir.reduce((a,r) => a + parseFloat(r.value||0), 0) / ir.length).toFixed(1));
+  };
+
+  return sessions.map(s => ({
+    ...s,
+    temp_avg:       rangeAvg(tempRows,  s.session_start, s.session_end),
+    heat_index_avg: rangeAvg(heatRows,  s.session_start, s.session_end),
+    humidity_avg:   rangeAvg(humidRows, s.session_start, s.session_end),
+    is_peak:        (nearest(touRows, s.session_start) == 1),
+  }));
+}
+
+function rmSetChartMode(mode, el) {
+  rmChartMode = mode;
+  document.querySelectorAll(".rm-chart-toggle[id^='rm-toggle']").forEach(b => b.classList.remove("active"));
+  if (el) el.classList.add("active");
+  renderRmMainChart(rmAnalyticsSessions);
+}
+
+function rmSetCondition(cond, el) {
+  rmChartCondition = cond;
+  document.querySelectorAll(".rm-chart-toggle[id^='rm-cond']").forEach(b => b.classList.remove("active"));
+  if (el) el.classList.add("active");
+  renderRmMainChart(rmAnalyticsSessions);
+}
+
+function renderRmMainChart(sessions) {
+  const canvas = document.getElementById("rm-main-chart");
+  if (!canvas || typeof Chart === "undefined") return;
+  if (rmMainChart) { try { rmMainChart.destroy(); } catch(e) {} rmMainChart = null; }
+
+  const complete = sessions.filter(s => s.session_end && s.duration_minutes != null);
+  if (!complete.length) return;
+
+  const condKey   = rmChartCondition === "temp" ? "temp_avg" : rmChartCondition === "heat" ? "heat_index_avg" : "humidity_avg";
+  const condLabel = rmChartCondition === "temp" ? "Temp (°F)" : rmChartCondition === "heat" ? "Heat Index (°F)" : "Humidity (%)";
+  const condColor = rmChartCondition === "temp" ? "#e67e22" : rmChartCondition === "heat" ? "#c0392b" : "#2980b9";
+
+  const sorted  = complete.slice().sort((a,b) => new Date(a.session_start)-new Date(b.session_start));
+  const labels  = sorted.map(s => new Date(s.session_start).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}));
+  const durLine = sorted.map(s => s.duration_minutes||0);
+  const condLine = sorted.map(s => s[condKey]);
+  const ptColors = sorted.map(s => s.is_peak ? "rgba(192,57,43,0.85)" : "rgba(29,158,117,0.85)");
+
+  rmMainChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Duration (min)", data: durLine, borderColor: "rgba(29,158,117,0.9)", backgroundColor: "rgba(29,158,117,0.08)", pointBackgroundColor: ptColors, pointBorderColor: ptColors, pointRadius: 4, borderWidth: 2, tension: 0.3, fill: true, yAxisID: "y" },
+        { label: condLabel, data: condLine, borderColor: condColor, backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.3, borderDash: [4,3], yAxisID: "y2" }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: "top", labels: { font: { size: 11 } } }, tooltip: { mode: "index", intersect: false } },
+      scales: {
+        x:  { ticks: { maxTicksLimit: 10, font: { size: 10 } }, grid: { color: "rgba(0,0,0,0.05)" } },
+        y:  { position: "left",  title: { display: true, text: "Duration (min)", font: { size: 10 } }, ticks: { font: { size: 10 } } },
+        y2: { position: "right", title: { display: true, text: condLabel, font: { size: 10 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function renderRmDailySummary(sessions, rangeDays) {
+  const el = document.getElementById("rm-daily-summary");
+  if (!el) return;
+  if (!sessions.length) { el.innerHTML = '<div class="sched-empty">No data.</div>'; return; }
+
+  const byDay = {};
+  sessions.forEach(s => {
+    const day = new Date(s.session_start).toLocaleDateString([],{month:"short",day:"numeric"});
+    if (!byDay[day]) byDay[day] = { count:0, mins:0, peakCount:0 };
+    byDay[day].count++;
+    byDay[day].mins += s.duration_minutes || 0;
+    if (s.is_peak) byDay[day].peakCount++;
+  });
+
+  const fmtDur = m => m < 60 ? Math.round(m)+" min" : (m/60).toFixed(1)+" h";
+  el.innerHTML = `
+    <div class="rm-daily-row rm-session-header" style="grid-template-columns:100px 60px 70px 70px 70px 70px 70px;">
+      <span>Date</span><span>Sessions</span><span>Total Runtime</span><span>Avg Duration</span><span>Peak Sessions</span>
+    </div>
+    ${Object.entries(byDay).reverse().map(([day, d]) => `
+    <div class="rm-daily-row" style="grid-template-columns:100px 60px 70px 70px 70px 70px 70px;">
+      <span style="font-weight:600;">${day}</span>
+      <span>${d.count}</span>
+      <span>${fmtDur(d.mins)}</span>
+      <span>${d.count ? fmtDur(d.mins/d.count) : "—"}</span>
+      <span style="color:${d.peakCount>0?"var(--red)":"var(--text-hint)"};">${d.peakCount}</span>
+    </div>`).join("")}`;
+}
+
+function renderRmSessionTable(sessions, limitOverride) {
+  const el       = document.getElementById("rm-sessions-table");
+  const countEl  = document.getElementById("rm-sessions-count");
+  const sliderEl = document.getElementById("rm-sessions-slider");
+  if (!el) return;
+  if (!sessions.length) { el.innerHTML = '<div class="sched-empty">No sessions found.</div>'; return; }
+
+  const limit   = limitOverride ?? parseInt(sliderEl?.value || "50");
+  const sorted  = sessions.slice().reverse();
+  const visible = sorted.slice(0, limit);
+  const total   = sorted.length;
+
+  if (sliderEl) { sliderEl.max = Math.max(total, 10); if (parseInt(sliderEl.value) > total) sliderEl.value = total; }
+  if (countEl) countEl.textContent = `${visible.length} of ${total} session${total !== 1 ? "s" : ""}`;
+
+  const fmtDur = m => m==null?"—":m<60?`${Math.round(m)} min`:`${(m/60).toFixed(1)} h`;
+  const fmtTs  = ts => ts?new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
+  const fmtF   = (v,u) => v!=null?parseFloat(v).toFixed(1)+u:"—";
+
+  el.innerHTML = `
+    <div class="rm-session-row rm-session-header">
+      <span>Start</span><span>Duration</span><span>Temp °F</span><span>Heat Idx</span><span>Humidity</span><span>TOU</span><span>Source</span><span>Status</span>
+    </div>
+    ${visible.map(s => {
+      const dur=s.duration_minutes;
+      const dc=dur==null?"var(--text-hint)":dur>30?"var(--red)":dur>15?"var(--amber)":"var(--text-primary)";
+      const pk=s.is_peak
+        ?'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(220,38,38,0.1);color:var(--red);font-weight:700;">PEAK</span>'
+        :'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--surface2);color:var(--text-hint);">off</span>';
+      return `<div class="rm-session-row">
+        <span style="font-size:10px;">${fmtTs(s.session_start)}</span>
+        <span style="font-weight:600;color:${dc};">${fmtDur(dur)}</span>
+        <span style="color:var(--red);">${fmtF(s.temp_avg,"°")}</span>
+        <span style="color:var(--amber);">${fmtF(s.heat_index_avg,"°")}</span>
+        <span style="color:var(--blue-dark);">${fmtF(s.humidity_avg,"%")}</span>
+        <span>${pk}</span>
+        <span style="font-size:10px;color:var(--text-hint);">${s.trigger_source||"—"}</span>
+        <span style="font-size:10px;color:${s.session_end?"var(--green-dark)":"var(--amber)"};">${s.session_end?"Complete":"Open"}</span>
+      </div>`;
+    }).join("")}`;
+}
+
+function rmUpdateSessionSlider(val) {
+  const labelEl = document.getElementById("rm-sessions-slider-label");
+  const n = parseInt(val);
+  if (labelEl) labelEl.textContent = n >= (rmAnalyticsSessions?.length || 0) ? "All" : `${n} rows`;
+  if (Array.isArray(rmAnalyticsSessions) && rmAnalyticsSessions.length) renderRmSessionTable(rmAnalyticsSessions, n);
+}
+
+function exportRuntimeCSV() {
+  if (!rmAnalyticsSessions.length) { setStatus("error","No data to export."); return; }
+  const headers = ["Device","Start","End","Duration (min)","Temp Avg (°F)","Heat Index Avg (°F)","Humidity Avg (%)","On-Peak","Source"];
+  const rows = rmAnalyticsSessions.map(s => [
+    unitName(s.device_uid)||s.device_uid, s.session_start, s.session_end||"",
+    s.duration_minutes||"", s.temp_avg||"", s.heat_index_avg||"", s.humidity_avg||"",
+    s.is_peak?"Yes":"No", s.trigger_source||""
+  ].map(v=>`"${v}"`).join(","));
+  const csv  = [headers.join(","),...rows].join("\n");
+  const blob = new Blob([csv],{type:"text/csv"});
+  const a    = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `runtime_sessions_${new Date().toISOString().split("T")[0]}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+async function runRuntimeBackfill() {
+  const deviceFilter = document.getElementById("rm-backfill-device")?.value;
+  const fromDate     = document.getElementById("rm-backfill-from")?.value;
+  const toDate       = document.getElementById("rm-backfill-to")?.value;
+  const progEl       = document.getElementById("rm-backfill-progress");
+  const barEl        = document.getElementById("rm-backfill-bar");
+  const statusEl     = document.getElementById("rm-backfill-status");
+  const resultEl     = document.getElementById("rm-backfill-result");
+
+  if (!fromDate || !toDate) { if(resultEl) resultEl.textContent = "⚠ Select a date range."; return; }
+  if (progEl) progEl.style.display = "block";
+  if (resultEl) resultEl.textContent = "Starting backfill…";
+
+  const onThreshold = parseFloat(rmSettings.current_on_threshold || "0.5");
+  const fromISO = fromDate + "T00:00:00.000Z";
+  const toISO   = toDate   + "T23:59:59.999Z";
+  const deviceUids = deviceFilter ? [deviceFilter] : DEVICES.map(d => d.uid);
+
+  if (!deviceUids.length) { if(resultEl) resultEl.textContent = "⚠ No devices found."; return; }
+
+  let totalSessions = 0;
+  for (let di = 0; di < deviceUids.length; di++) {
+    const uid = deviceUids[di];
+    const pct = Math.round((di / deviceUids.length) * 100);
+    if (barEl)    barEl.style.width = pct + "%";
+    if (statusEl) statusEl.textContent = `Scanning ${unitName(uid)||uid} (${di+1}/${deviceUids.length})…`;
+
+    let readings = [];
+    try {
+      const rows = await supabaseGet(
+        `device_readings?device_uid=eq.${encodeURIComponent(uid)}&recorded_at=gte.${fromISO}&recorded_at=lte.${toISO}&order=recorded_at.asc&limit=5000&select=recorded_at,current`
+      );
+      readings = Array.isArray(rows) ? rows : [];
+    } catch(e) { continue; }
+    if (!readings.length) continue;
+
+    // Delete existing backfill sessions for this device/range
+    try { await supabaseDelete("equipment_runtime_sessions", `device_uid=eq.${encodeURIComponent(uid)}&session_start=gte.${fromISO}&session_start=lte.${toISO}&trigger_source=eq.backfill`); } catch(e) {}
+
+    // Detect ON/OFF transitions
+    const sessions = [];
+    let sessionStart = null, prevOn = false;
+    for (const row of readings) {
+      const amps = row.current != null ? row.current / 10 : 0;
+      const isOn = amps >= onThreshold;
+      if (isOn && !prevOn)  { sessionStart = row.recorded_at; }
+      else if (!isOn && prevOn && sessionStart) { sessions.push({ start: sessionStart, end: row.recorded_at }); sessionStart = null; }
+      prevOn = isOn;
+    }
+    if (prevOn && sessionStart) sessions.push({ start: sessionStart, end: null });
+
+    // Write sessions
+    for (const sess of sessions) {
+      const dur = sess.end ? Math.round((new Date(sess.end) - new Date(sess.start)) / 60000) : null;
+      try {
+        await supabasePost("equipment_runtime_sessions", {
+          device_uid: uid, session_start: sess.start, session_end: sess.end,
+          duration_minutes: dur, trigger_source: "backfill", created_at: new Date().toISOString()
+        });
+        totalSessions++;
+      } catch(e) {}
+    }
+  }
+
+  if (barEl)    barEl.style.width = "100%";
+  if (statusEl) statusEl.textContent = "Complete.";
+  if (resultEl) resultEl.textContent = `✓ Backfill complete — ${totalSessions} sessions reconstructed. Click Refresh to view.`;
+  setTimeout(() => { if(progEl) progEl.style.display = "none"; }, 3000);
+}
 </script>
 </body>
 </html>
