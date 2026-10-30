@@ -1232,8 +1232,12 @@
         <div style="position:relative;margin-bottom:14px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
             <span style="font-size:11px;color:var(--text-hint);">Chart:</span>
-            <button id="rm-toggle-timeline" class="rm-chart-toggle active" onclick="rmSetChartMode('timeline',this)">Timeline</button>
-            <button id="rm-toggle-scatter"  class="rm-chart-toggle"        onclick="rmSetChartMode('scatter',this)">Trend</button>
+            <button id="rm-toggle-line" class="rm-chart-toggle active" onclick="rmSetChartMode('line',this)">Trend Line</button>
+            <button id="rm-toggle-bar"  class="rm-chart-toggle"        onclick="rmSetChartMode('bar',this)">Bars</button>
+            <span style="font-size:11px;color:var(--text-hint);margin-left:8px;">Show:</span>
+            <button id="rm-tod-all"   class="rm-chart-toggle active" onclick="rmSetTimeOfDay('all',this)">All</button>
+            <button id="rm-tod-day"   class="rm-chart-toggle"        onclick="rmSetTimeOfDay('day',this)">&#9728; Daytime</button>
+            <button id="rm-tod-night" class="rm-chart-toggle"        onclick="rmSetTimeOfDay('night',this)">&#9790; Nighttime</button>
             <span style="font-size:11px;color:var(--text-hint);margin-left:8px;">Overlay:</span>
             <button id="rm-cond-temp"     class="rm-chart-toggle active" onclick="rmSetCondition('temp',this)">Temp</button>
             <button id="rm-cond-heat"     class="rm-chart-toggle"        onclick="rmSetCondition('heat',this)">Heat Idx</button>
@@ -5742,7 +5746,12 @@ async function supabaseGetPaged(query, maxRows = 5000) {
 let rmSettings         = {};
 let rmSchedulePoller   = null;
 let rmTriggerPoller    = null;
-let rmChartMode        = "timeline";
+let rmChartMode        = "line";   // "line" | "bar"
+let rmTimeOfDay        = "all";    // "all" | "day" | "night"
+let rmAllSessions      = [];       // unfiltered sessions for the selected device/range
+const RM_DAY_START     = 6;        // local hour night ends (6:00 AM)
+const RM_NIGHT_START   = 20;       // local hour night begins (8:00 PM)
+const rmIsNight = ts => { const h = new Date(ts).getHours(); return h >= RM_NIGHT_START || h < RM_DAY_START; };
 let rmChartCondition   = "temp";
 let rmShowDayNight     = false;
 let rmMainChart        = null;
@@ -5832,8 +5841,27 @@ async function loadRuntimeAnalytics() {
 
   if (tableEl) tableEl.innerHTML = '<div class="sched-empty">Correlating weather data…</div>';
   sessions = await joinFeedDataToSessions(sessions);
-  rmAnalyticsSessions = sessions;
+  rmAllSessions = sessions;
+  rmRenderAnalytics();
+}
 
+// Apply the Day/Night filter, then redraw KPIs, chart, daily summary and table
+function rmRenderAnalytics() {
+  const tableEl = document.getElementById("rm-sessions-table");
+  const kpiIds = ["rm-kpi-sessions","rm-kpi-total-hrs","rm-kpi-avg-dur","rm-kpi-longest",
+                  "rm-kpi-avg-temp","rm-kpi-avg-heat","rm-kpi-avg-humidity","rm-kpi-peak-pct"];
+  const rangeDays = parseInt(document.getElementById("rm-analytics-range")?.value || "30");
+  const sessions = rmAllSessions.filter(s =>
+    rmTimeOfDay === "all" ? true :
+    rmTimeOfDay === "night" ? rmIsNight(s.session_start) : !rmIsNight(s.session_start));
+  rmAnalyticsSessions = sessions;
+  if (!sessions.length) {
+    if (rmMainChart) { try { rmMainChart.destroy(); } catch(e) {} rmMainChart = null; }
+    if (tableEl) tableEl.innerHTML = `<div class="sched-empty">No ${rmTimeOfDay === "night" ? "nighttime" : rmTimeOfDay === "day" ? "daytime" : ""} sessions in this range.</div>`;
+    kpiIds.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = "—"; });
+    const d = document.getElementById("rm-daily-summary"); if (d) d.innerHTML = '<div class="sched-empty">No data.</div>';
+    return;
+  }
   const complete  = sessions.filter(s => s.session_end && s.duration_minutes != null);
   const totalMins = complete.reduce((s,r) => s + (r.duration_minutes||0), 0);
   const avgDur    = complete.length ? totalMins / complete.length : 0;
@@ -5906,12 +5934,42 @@ function rmSetChartMode(mode, el) {
   renderRmMainChart(rmAnalyticsSessions);
 }
 
+function rmSetTimeOfDay(mode, el) {
+  rmTimeOfDay = mode;
+  document.querySelectorAll(".rm-chart-toggle[id^='rm-tod']").forEach(b => b.classList.remove("active"));
+  if (el) el.classList.add("active");
+  rmRenderAnalytics();
+}
+
 function rmSetCondition(cond, el) {
   rmChartCondition = cond;
   document.querySelectorAll(".rm-chart-toggle[id^='rm-cond']").forEach(b => b.classList.remove("active"));
   if (el) el.classList.add("active");
   renderRmMainChart(rmAnalyticsSessions);
 }
+
+// Light-grey bands for nighttime (RM_NIGHT_START to RM_DAY_START, local time)
+const rmNightShadePlugin = {
+  id: "rmNightShade",
+  beforeDatasetsDraw(chart) {
+    const { ctx, chartArea, scales } = chart;
+    const x = scales.x;
+    if (!x || !chartArea) return;
+    const dayMs = 864e5;
+    const first = new Date(x.min); first.setHours(0,0,0,0);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(chartArea.left, chartArea.top, chartArea.right-chartArea.left, chartArea.bottom-chartArea.top); ctx.clip();
+    ctx.fillStyle = "rgba(120,120,120,0.16)";
+    for (let d = first.getTime() - dayMs; d <= x.max + dayMs; d += dayMs) {
+      const base = new Date(d);
+      const ns = new Date(base.getFullYear(), base.getMonth(), base.getDate(), RM_NIGHT_START, 0, 0).getTime();
+      const ne = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1, RM_DAY_START, 0, 0).getTime();
+      const px0 = x.getPixelForValue(Math.max(ns, x.min)), px1 = x.getPixelForValue(Math.min(ne, x.max));
+      if (px1 > px0) ctx.fillRect(px0, chartArea.top, px1 - px0, chartArea.bottom - chartArea.top);
+    }
+    ctx.restore();
+  }
+};
 
 function renderRmMainChart(sessions) {
   const canvas = document.getElementById("rm-main-chart");
@@ -5925,27 +5983,40 @@ function renderRmMainChart(sessions) {
   const condLabel = rmChartCondition === "temp" ? "Temp (°F)" : rmChartCondition === "heat" ? "Heat Index (°F)" : "Humidity (%)";
   const condColor = rmChartCondition === "temp" ? "#e67e22" : rmChartCondition === "heat" ? "#c0392b" : "#2980b9";
 
-  const sorted  = complete.slice().sort((a,b) => new Date(a.session_start)-new Date(b.session_start));
-  const labels  = sorted.map(s => new Date(s.session_start).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}));
-  const durLine = sorted.map(s => s.duration_minutes||0);
-  const condLine = sorted.map(s => s[condKey]);
+  const sorted   = complete.slice().sort((a,b) => new Date(a.session_start)-new Date(b.session_start));
+  const durData  = sorted.map(s => ({ x: new Date(s.session_start).getTime(), y: s.duration_minutes || 0 }));
+  const condData = sorted.map(s => ({ x: new Date(s.session_start).getTime(), y: s[condKey] }));
   const ptColors = sorted.map(s => s.is_peak ? "rgba(192,57,43,0.85)" : "rgba(29,158,117,0.85)");
+  const isBar    = rmChartMode === "bar";
+
+  const pad = 3600e3;
+  const xMin = durData[0].x - pad, xMax = durData[durData.length-1].x + pad;
+  const fmtTick = v => new Date(v).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+
+  const durDataset = isBar
+    ? { type: "bar", label: "Duration (min)", data: durData, backgroundColor: ptColors, borderColor: ptColors, borderWidth: 0, barThickness: 8, yAxisID: "y", order: 2 }
+    : { type: "line", label: "Duration (min)", data: durData, borderColor: "rgba(29,158,117,0.9)", backgroundColor: "rgba(29,158,117,0.08)", pointBackgroundColor: ptColors, pointBorderColor: ptColors, pointRadius: 4, borderWidth: 2, tension: 0.3, fill: true, yAxisID: "y", order: 2 };
 
   rmMainChart = new Chart(canvas, {
-    type: "line",
+    type: isBar ? "bar" : "line",
+    plugins: [rmNightShadePlugin],
     data: {
-      labels,
       datasets: [
-        { label: "Duration (min)", data: durLine, borderColor: "rgba(29,158,117,0.9)", backgroundColor: "rgba(29,158,117,0.08)", pointBackgroundColor: ptColors, pointBorderColor: ptColors, pointRadius: 4, borderWidth: 2, tension: 0.3, fill: true, yAxisID: "y" },
-        { label: condLabel, data: condLine, borderColor: condColor, backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.3, borderDash: [4,3], yAxisID: "y2" }
+        durDataset,
+        { type: "line", label: condLabel, data: condData, borderColor: condColor, backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.3, borderDash: [4,3], yAxisID: "y2", order: 1 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: true,
-      plugins: { legend: { position: "top", labels: { font: { size: 11 } } }, tooltip: { mode: "index", intersect: false } },
+      parsing: false,
+      plugins: {
+        legend: { position: "top", labels: { font: { size: 11 } } },
+        tooltip: { mode: "nearest", intersect: false, axis: "x",
+          callbacks: { title: items => items.length ? fmtTick(items[0].parsed.x) : "" } }
+      },
       scales: {
-        x:  { ticks: { maxTicksLimit: 10, font: { size: 10 } }, grid: { color: "rgba(0,0,0,0.05)" } },
-        y:  { position: "left",  title: { display: true, text: "Duration (min)", font: { size: 10 } }, ticks: { font: { size: 10 } } },
+        x:  { type: "linear", min: xMin, max: xMax, ticks: { maxTicksLimit: 8, font: { size: 10 }, callback: fmtTick }, grid: { color: "rgba(0,0,0,0.05)" } },
+        y:  { position: "left",  beginAtZero: true, title: { display: true, text: "Duration (min)", font: { size: 10 } }, ticks: { font: { size: 10 } } },
         y2: { position: "right", title: { display: true, text: condLabel, font: { size: 10 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
       }
     }
