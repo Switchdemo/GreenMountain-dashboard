@@ -5729,7 +5729,8 @@ async function supabaseGetPaged(query, maxRows = 5000) {
       headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`, "Range-Unit": "items", "Range": `${offset}-${offset+pageSize-1}` }
     });
     const rows = await res.json();
-    if (!Array.isArray(rows) || !rows.length) break;
+    if (!Array.isArray(rows)) { if (rows && (rows.message || rows.error)) throw new Error(rows.message || rows.error); break; }
+    if (!rows.length) break;
     allRows = allRows.concat(rows);
     if (rows.length < pageSize) break;
     offset += pageSize;
@@ -6065,7 +6066,7 @@ async function runRuntimeBackfill() {
 
   if (!deviceUids.length) { if(resultEl) resultEl.textContent = "⚠ No devices found."; return; }
 
-  let totalSessions = 0;
+  let totalSessions = 0, failedWrites = 0, lastError = "";
   for (let di = 0; di < deviceUids.length; di++) {
     const uid = deviceUids[di];
     const pct = Math.round((di / deviceUids.length) * 100);
@@ -6074,15 +6075,20 @@ async function runRuntimeBackfill() {
 
     let readings = [];
     try {
-      const rows = await supabaseGet(
-        `device_readings?device_uid=eq.${encodeURIComponent(uid)}&recorded_at=gte.${fromISO}&recorded_at=lte.${toISO}&order=recorded_at.asc&limit=5000&select=recorded_at,current`
+      // Page through ALL rows (Supabase caps a single request at 1000 rows)
+      readings = await supabaseGetPaged(
+        `device_readings?device_uid=eq.${encodeURIComponent(uid)}&recorded_at=gte.${fromISO}&recorded_at=lte.${toISO}&order=recorded_at.asc&select=recorded_at,current`,
+        200000
       );
-      readings = Array.isArray(rows) ? rows : [];
-    } catch(e) { continue; }
+    } catch(e) { failedWrites++; lastError = "read: " + e.message; continue; }
     if (!readings.length) continue;
 
     // Delete existing backfill sessions for this device/range
-    try { await supabaseDelete("equipment_runtime_sessions", `device_uid=eq.${encodeURIComponent(uid)}&session_start=gte.${fromISO}&session_start=lte.${toISO}&trigger_source=eq.backfill`); } catch(e) {}
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/equipment_runtime_sessions?device_uid=eq.${encodeURIComponent(uid)}&session_start=gte.${fromISO}&session_start=lte.${toISO}&trigger_source=eq.backfill`, {
+        method: "DELETE", headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}` }
+      });
+    } catch(e) {}
 
     // Detect ON/OFF transitions
     const sessions = [];
@@ -6100,18 +6106,25 @@ async function runRuntimeBackfill() {
     for (const sess of sessions) {
       const dur = sess.end ? Math.round((new Date(sess.end) - new Date(sess.start)) / 60000) : null;
       try {
-        await supabasePost("equipment_runtime_sessions", {
-          device_uid: uid, session_start: sess.start, session_end: sess.end,
-          duration_minutes: dur, trigger_source: "backfill", created_at: new Date().toISOString()
+        const wr = await fetch(`${SUPABASE_URL}/rest/v1/equipment_runtime_sessions`, {
+          method: "POST",
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${currentSession?.access_token || SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": "return=minimal" },
+          body: JSON.stringify({
+            device_uid: uid, session_start: sess.start, session_end: sess.end,
+            duration_minutes: dur, trigger_source: "backfill", created_at: new Date().toISOString()
+          })
         });
-        totalSessions++;
-      } catch(e) {}
+        if (wr.ok) totalSessions++;
+        else { failedWrites++; lastError = `${wr.status} ${(await wr.text()).slice(0,200)}`; }
+      } catch(e) { failedWrites++; lastError = e.message; }
     }
   }
 
   if (barEl)    barEl.style.width = "100%";
   if (statusEl) statusEl.textContent = "Complete.";
-  if (resultEl) resultEl.textContent = `✓ Backfill complete — ${totalSessions} sessions reconstructed. Click Refresh to view.`;
+  if (resultEl) resultEl.textContent = failedWrites
+    ? `⚠ Backfill finished with ${failedWrites} error(s); ${totalSessions} sessions saved. Last error: ${lastError}`
+    : `✓ Backfill complete — ${totalSessions} sessions reconstructed. Click Refresh to view.`;
   setTimeout(() => { if(progEl) progEl.style.display = "none"; }, 3000);
 }
 </script>
